@@ -40,7 +40,7 @@ const verifyFToken = async (req, res, next) => {
   try {
     const idToken = token.split(" ")[1];
     const decoded = await admin.auth().verifyIdToken(idToken);
-    console.log(decoded)
+    // console.log(decoded)
     req.decoded_email = decoded.email;
     next();
   } catch (error) {
@@ -140,7 +140,7 @@ async function run() {
             })
          }
         const asset = req.body;
-        console.log(asset)
+      
 
         const newAsset = {
           productName: asset.productName,
@@ -172,22 +172,35 @@ async function run() {
     // Asset get for hr asset list 
     app.get("/assets",verifyFToken,async(req,res)=>{
        try {
-          const hrEmail = req.decoded_email;
-         const email = req.query.email;
-         if(hrEmail!==email){
-            return res.status(400).send({
-                success:false,
-                message:"Unauthorized accessed"
-            })
-         }
-         const query = { email };
-         const result = await assetCollection.find(query).toArray();
-         res.status(200).send({
-            success:true,
-            message:"Asset get successfully",
-            data:result,
+        
+          const decoded_email = req.decoded_email;
+         const hrEmail = req.query.email;
+           const query = { hrEmail };
+         let result=[]
+         if( hrEmail ){
+             if (hrEmail !== decoded_email) {
+               return res.status(400).send({
+                 success: false,
+                 message: "Unauthorized accessed",
+               });
+             }
+           
+              result = await assetCollection.find(query).toArray();
+            
 
-         })
+         }
+           else{
+             result = await assetCollection.find().toArray();
+           }
+
+            res.status(200).send({
+              success: true,
+              message: "Asset get successfully",
+              data: result,
+            });
+
+        
+        
        } 
        
        catch (error) {
