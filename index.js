@@ -1,7 +1,7 @@
 const express = require("express");
 const cors = require("cors");
 require("dotenv").config();
-const { MongoClient, ServerApiVersion } = require("mongodb");
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const admin = require("firebase-admin");
 
 const app = express();
@@ -169,6 +169,25 @@ async function run() {
         });
       }
     });
+
+//    get assets for details pages 
+
+
+    app.get("/assets/:id",verifyFToken,async(req,res)=>{
+        try{
+            const id=req.params.id;
+        const query={_id:new ObjectId(id)}
+        const result=await  assetCollection.findOne(query)
+         res.send(result)
+        }
+        catch(error){
+            res.status(500).send({
+                success:false,
+                message:"Internal server error "
+            })
+
+        }
+    })
     // Asset get for hr asset list 
     app.get("/assets",verifyFToken,async(req,res)=>{
        try {
@@ -185,12 +204,12 @@ async function run() {
                });
              }
            
-              result = await assetCollection.find(query).toArray();
+              result = await assetCollection.find(query).sort({dateAdded:-1}).toArray();
             
 
          }
            else{
-             result = await assetCollection.find().toArray();
+             result = await assetCollection.find().sort({dateAdded:-1}).toArray();
            }
 
             res.status(200).send({
