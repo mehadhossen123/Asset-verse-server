@@ -169,10 +169,39 @@ async function run() {
         });
       }
     });
+    // Asset get for hr asset list 
+    app.get("/assets",verifyFToken,async(req,res)=>{
+       try {
+          const hrEmail = req.decoded_email;
+         const email = req.query.email;
+         if(hrEmail!==email){
+            return res.status(400).send({
+                success:false,
+                message:"Unauthorized accessed"
+            })
+         }
+         const query = { email };
+         const result = await assetCollection.find(query).toArray();
+         res.status(200).send({
+            success:true,
+            message:"Asset get successfully",
+            data:result,
 
-<<<<<<< HEAD
-    // Ping MongoDB
-=======
+         })
+       } 
+       
+       catch (error) {
+         res.status(500).send({
+           success: false,
+           message: "Internal server error",
+         });
+       }
+       
+    })
+
+// <<<<<<< HEAD
+//     // Ping MongoDB
+// =======
 
 
 //  { ******** Users Related Api ***************  }
@@ -236,7 +265,7 @@ app.get("/users/role",async (req,res)=>{
 
 
     // Send a ping to confirm a successful connection
->>>>>>> 3021bc3 (create rolebsed api for find role)
+//  (create rolebsed api for find role)
     await client.db("admin").command({ ping: 1 });
     console.log("Connected to MongoDB successfully!");
   } finally {
