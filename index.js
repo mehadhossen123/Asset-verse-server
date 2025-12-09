@@ -319,6 +319,42 @@ app.post("/requests", verifyFToken,async(req,res)=>{
 })
 
 
+//  ***** Asset get form hr ********   // 
+
+
+ app.get("/requests", verifyFToken, async (req, res) => {
+   try {
+     const decoded_email = req.decoded_email;
+     const hrEmail = req.query.email;
+     const query = { hrEmail };
+   
+   
+       if (hrEmail!== decoded_email) {
+         return res.status(400).send({
+           success: false,
+           message: "Unauthorized accessed",
+         });
+       }
+
+       result = await assetCollection
+         .find(query)
+         .sort({ dateAdded: -1 })
+         .toArray();
+      
+
+     res.status(200).send({
+       success: true,
+       message: "Asset get successfully",
+       data: result,
+     });
+   } catch (error) {
+     res.status(500).send({
+       success: false,
+       message: "Internal server error",
+     });
+   }
+ });
+
     // Send a ping to confirm a successful connection
 //  (create rolebsed api for find role)
     await client.db("admin").command({ ping: 1 });
