@@ -59,6 +59,7 @@ async function run() {
     const database = client.db("Asset_verse_db");
     const usersCollection = database.collection("users");
     const assetCollection = database.collection("assets");
+    const requestCollection = database.collection("requests");
 
     /* =============================
        🔹 USERS API
@@ -293,6 +294,28 @@ app.get("/users/role",async (req,res)=>{
         message: "Internal server error ",
       });
     }
+})
+
+// { ******* ASSet request related api ********* }
+app.post("/requests", verifyFToken,async(req,res)=>{
+   try {
+
+     const requestAsset = req.body;
+     requestAsset.requestDate=new Date()
+     const result=await requestCollection.insertOne(requestAsset)
+     res.status(200).send({
+        success:true,
+        message:"Request added successful",
+        data:result
+     })
+
+   } 
+   catch (error) {
+     res.status(500).send({
+       success: false,
+       message: "Internal server error ",
+     });
+   }
 })
 
 
