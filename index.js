@@ -40,7 +40,6 @@ const verifyFToken = async (req, res, next) => {
   try {
     const idToken = token.split(" ")[1];
     const decoded = await admin.auth().verifyIdToken(idToken);
-    // console.log(decoded)
     req.decoded_email = decoded.email;
     next();
   } catch (error) {
@@ -60,6 +59,8 @@ async function run() {
     const usersCollection = database.collection("users");
     const assetCollection = database.collection("assets");
     const requestCollection = database.collection("requests");
+    const assignedAssetCollection = database.collection("assignedAssets");
+    const employeeAffiliationsCollection = database.collection("affiliations");
 
     /* =============================
        🔹 USERS API
@@ -69,7 +70,6 @@ async function run() {
       try {
         const user = req.body;
 
-        // Check existing user
         const exists = await usersCollection.findOne({
           email: user.managerEmail || user.employeeEmail,
         });
@@ -81,7 +81,6 @@ async function run() {
           });
         }
 
-        // Common fields
         user.createdAt = new Date();
         user.updatedAt = new Date();
 
@@ -111,7 +110,6 @@ async function run() {
       }
     });
 
-    // Get user role
     app.get("/users/role", async (req, res) => {
       try {
         const email = req.query.email;
@@ -120,7 +118,7 @@ async function run() {
       } catch (error) {
         res.status(500).send({
           success: false,
-          message: "Internal server error",
+          message: "Internal server error ",
         });
       }
     });
@@ -131,29 +129,28 @@ async function run() {
 
     app.post("/assets", verifyFToken, async (req, res) => {
       try {
-         const hrEmail= req.decoded_email;
-         const hrQuery={email:hrEmail,role:"hr"}
-         const user=await usersCollection.findOne(hrQuery);
-         if(!user){
-            return res.status(400).send({
-                success:false,
-                message:"Hr not found "
-            })
-         }
+        const hrEmail = req.decoded_email;
+        const hrQuery = { email: hrEmail, role: "hr" };
+        const user = await usersCollection.findOne(hrQuery);
+
+        if (!user) {
+          return res.status(400).send({
+            success: false,
+            message: "Hr not found ",
+          });
+        }
+
         const asset = req.body;
-      
 
         const newAsset = {
           productName: asset.productName,
           productImage: asset.productImage,
           productType: asset.productType,
           productQuantity: asset.productQuantity,
-
           availableQuantity: asset.productQuantity,
-          dateAdded: new Date(), // auto time
-
-          hrEmail: req.decoded_email, // token email
-          companyName:user?.companyName,
+          dateAdded: new Date(),
+          hrEmail: req.decoded_email,
+          companyName: user?.companyName,
         };
 
         const result = await assetCollection.insertOne(newAsset);
@@ -171,196 +168,243 @@ async function run() {
       }
     });
 
-//    get assets for details pages 
+    app.get("/assets/:id", verifyFToken, async (req, res) => {
+      try {
+        const id = req.params.id;
+        const query = { _id: new ObjectId(id) };
+        const result = await assetCollection.findOne(query);
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({
+          success: false,
+          message: "Internal server error ",
+        });
+      }
+    });
 
+    app.get("/assets", verifyFToken, async (req, res) => {
+      try {
+        const decoded_email = req.decoded_email;
+        const hrEmail = req.query.email;
+        const query = { hrEmail };
+        let result = [];
 
-    app.get("/assets/:id",verifyFToken,async(req,res)=>{
-        try{
-            const id=req.params.id;
-        const query={_id:new ObjectId(id)}
-        const result=await  assetCollection.findOne(query)
-         res.send(result)
-        }
-        catch(error){
-            res.status(500).send({
-                success:false,
-                message:"Internal server error "
-            })
-
-        }
-    })
-    // Asset get for hr asset list 
-    app.get("/assets",verifyFToken,async(req,res)=>{
-       try {
-        
-          const decoded_email = req.decoded_email;
-         const hrEmail = req.query.email;
-           const query = { hrEmail };
-         let result=[]
-         if( hrEmail ){
-             if (hrEmail !== decoded_email) {
-               return res.status(400).send({
-                 success: false,
-                 message: "Unauthorized accessed",
-               });
-             }
-           
-              result = await assetCollection.find(query).sort({dateAdded:-1}).toArray();
-            
-
-         }
-           else{
-             result = await assetCollection.find().sort({dateAdded:-1}).toArray();
-           }
-
-            res.status(200).send({
-              success: true,
-              message: "Asset get successfully",
-              data: result,
+        if (hrEmail) {
+          if (hrEmail !== decoded_email) {
+            return res.status(400).send({
+              success: false,
+              message: "Unauthorized accessed",
             });
+          }
 
-        
-        
-       } 
-       
-       catch (error) {
-         res.status(500).send({
-           success: false,
-           message: "Internal server error",
-         });
-       }
-       
-    })
+          result = await assetCollection
+            .find(query)
+            .sort({ dateAdded: -1 })
+            .toArray();
+        } else {
+          result = await assetCollection
+            .find()
+            .sort({ dateAdded: -1 })
+            .toArray();
+        }
 
-// <<<<<<< HEAD
-//     // Ping MongoDB
-// =======
+        res.status(200).send({
+          success: true,
+          message: "Asset get successfully",
+          data: result,
+        });
+      } catch (error) {
+        res.status(500).send({
+          success: false,
+          message: "Internal server error",
+        });
+      }
+    });
 
+    // { ******* ASSet request related api ********* }
 
-//  { ******** Users Related Api ***************  }
- app.post("/users", async (req, res) => {
-   try {
-   
-     const user = req.body;
-     
-    
-     const exists = await usersCollection.findOne({ email:user.managerEmail||user.employeeEmail });
-     if (exists) {
-       return res.status(409).send({
-         success: false,
-         message: "User already exists",
-       });
-     }
+    app.post("/requests", verifyFToken, async (req, res) => {
+      try {
+        const requestAsset = req.body;
+        requestAsset.requestDate = new Date();
+        const result = await requestCollection.insertOne(requestAsset);
+        res.status(200).send({
+          success: true,
+          message: "Request added successful",
+          data: result,
+        });
+      } catch (error) {
+        res.status(500).send({
+          success: false,
+          message: "Internal server error ",
+        });
+      }
+    });
 
-    // common field 
-      user.createdAt = new Date(); // UTC save
-      user.updatedAt = new Date();
-    if(user?.role==="hr"){
-         user.packageLimit = 5;
-         user.currentEmployees = 0;
-         user.subscription = "basic";
-         user.email=user.managerEmail;
-  
-    }
-    if(user?.role==="employee"){
-        user.email = user.employeeEmail;
-    }
-    
- ;
-     const result = await usersCollection.insertOne(user);
-   
-     res.status(201).send({
-       success: true,
-       message: "User successfully created ",
-       data: result,
-     });
-   } catch (error) {
-     res.status(500).send({
-       success: false,
-       message: "Internal server error ",
-     });
-   }
- });
-//  *****  Find user role ********   /// 
-app.get("/users/role",async (req,res)=>{
-    try {
-      const email = req.query.email;
-      const query = { email };
-      const result = await usersCollection.findOne(query)
-      res.send(result)
-    } catch (error) {
-      res.status(500).send({
-        success: false,
-        message: "Internal server error ",
-      });
-    }
-})
+    app.get("/requests", verifyFToken, async (req, res) => {
+      try {
+        const decoded_email = req.decoded_email;
+        const hrEmail = req.query.email;
+        const query = { hrEmail };
 
-// { ******* ASSet request related api ********* }
-app.post("/requests", verifyFToken,async(req,res)=>{
-   try {
+        if (hrEmail !== decoded_email) {
+          return res.status(400).send({
+            success: false,
+            message: "Unauthorized accessed",
+          });
+        }
 
-     const requestAsset = req.body;
-     requestAsset.requestDate=new Date()
-     const result=await requestCollection.insertOne(requestAsset)
-     res.status(200).send({
-        success:true,
-        message:"Request added successful",
-        data:result
-     })
+        const result = await requestCollection
+          .find(query)
+          .sort({ dateAdded: -1 })
+          .toArray();
 
-   } 
-   catch (error) {
-     res.status(500).send({
-       success: false,
-       message: "Internal server error ",
-     });
-   }
-})
+        res.status(200).send({
+          success: true,
+          message: "Asset get successfully",
+          data: result,
+        });
+      } catch (error) {
+        res.status(500).send({
+          success: false,
+          message: "Internal server error",
+        });
+      }
+    });
 
+    // APPROVE API
+    app.patch("/requests/approve/:id", verifyFToken, async (req, res) => {
+      try {
+        const {
+          assetId,
+          companyName,
+          hrEmail,
+          requesterName,
+          requesterEmail,
+          assetType,
+          assetImage,
+          assetName,
+        } = req.body;
 
-//  ***** Asset get form hr ********   // 
+        const requestedAssetId = req.params.id;
+        const processedByEmail = req.decoded_email;
 
+        const approvedAsset = await requestCollection.findOne({
+          _id: new ObjectId(requestedAssetId),
+        });
 
- app.get("/requests", verifyFToken, async (req, res) => {
-   try {
-     const decoded_email = req.decoded_email;
-     const hrEmail = req.query.email;
-     const query = { hrEmail };
-   
-   
-       if (hrEmail!== decoded_email) {
-         return res.status(400).send({
-           success: false,
-           message: "Unauthorized accessed",
-         });
-       }
+        if (!approvedAsset) {
+          return res.status(404).send({
+            success: false,
+            message: "Requested asset not found ",
+          });
+        }
+        if (approvedAsset.requestStatus === "approved") {
+          return res.status(400).send({
+            success: false,
+            message: "Requested asset already approved ",
+          });
+        }
 
-       result = await assetCollection
-         .find(query)
-         .sort({ dateAdded: -1 })
-         .toArray();
-      
+        const hrUser = await usersCollection.findOne({ email: hrEmail });
+        const asset = await assetCollection.findOne({
+          _id: new ObjectId(assetId),
+        });
 
-     res.status(200).send({
-       success: true,
-       message: "Asset get successfully",
-       data: result,
-     });
-   } catch (error) {
-     res.status(500).send({
-       success: false,
-       message: "Internal server error",
-     });
-   }
- });
+        if (!asset || asset.availableQuantity <= 0) {
+          return res.status(404).send({
+            success: false,
+            message: "Asset out of stock ",
+          });
+        }
 
-    // Send a ping to confirm a successful connection
-//  (create rolebsed api for find role)
+        if (hrUser.packageLimit <= hrUser.currentEmployees) {
+          return res.status(404).send({
+            success: false,
+            message: "Your package is reached .Please upgrade your package ",
+          });
+        }
+
+        const assignedAsset = {
+          assetId,
+          assetName,
+          assetImage,
+          assetType,
+          employeeEmail: requesterEmail,
+          employeeName: requesterName,
+          hrEmail,
+          companyName,
+          assignmentDate: new Date(),
+          returnDate: null,
+          status: "assigned",
+        };
+
+        await assetCollection.updateOne(
+          { _id: new ObjectId(assetId) },
+          { $inc: { availableQuantity: -1 } }
+        );
+
+        await assignedAssetCollection.insertOne(assignedAsset);
+
+        const requestedAssetUpdateInfo = {
+          $set: {
+            requestStatus: "approved",
+            approvedDate: new Date(),
+            processedBh: processedByEmail,
+          },
+        };
+
+        await requestCollection.updateOne(
+          { _id: new ObjectId(requestedAssetId) },
+          requestedAssetUpdateInfo
+        );
+
+        const affiliation = await employeeAffiliationsCollection.findOne({
+          employeeEmail: requesterEmail,
+          hrEmail,
+        });
+
+        if (!affiliation) {
+          const affiliationInfo = {
+            employeeEmail: requesterEmail,
+            employeeName: requesterName,
+            hrEmail: hrEmail,
+            companyName: companyName,
+            companyLogo: hrUser.companyLogo,
+            affiliationDate: new Date(),
+            status: "active",
+          };
+          await employeeAffiliationsCollection.insertOne(affiliationInfo);
+
+          await usersCollection.updateOne(
+            { email: hrEmail },
+            {
+              $inc: {
+                currentEmployees: 1,
+              },
+            }
+          );
+        }
+
+        res.status(200).send({
+          success: true,
+          message: "Asset approved successfully ",
+          data: assignedAsset,
+        });
+      } catch (error) {
+        console.error(error);
+        res.status(500).send({
+          success: false,
+          message: "Internal server error ",
+        });
+      }
+    });
+
+    // ✔ THIS WAS MISSING (BRACKET FIXED)
     await client.db("admin").command({ ping: 1 });
     console.log("Connected to MongoDB successfully!");
   } finally {
-    //
+    // optional close
   }
 }
 
