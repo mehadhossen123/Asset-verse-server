@@ -61,6 +61,7 @@ async function run() {
     const requestCollection = database.collection("requests");
     const assignedAssetCollection = database.collection("assignedAssets");
     const employeeAffiliationsCollection = database.collection("affiliations");
+    const packagesCollection = database.collection("packages");
 
     /* =============================
        🔹 USERS API
@@ -147,7 +148,7 @@ async function run() {
           productImage: asset.productImage,
           productType: asset.productType,
           productQuantity: asset.productQuantity,
-          availableQuantity: asset.productQuantity,
+          availableQuantity: parseInt(asset.productQuantity),
           dateAdded: new Date(),
           hrEmail: req.decoded_email,
           companyName: user?.companyName,
@@ -275,22 +276,12 @@ async function run() {
     // APPROVE API
     app.patch("/requests/approve/:id", verifyFToken, async (req, res) => {
       try {
-        const {
-          assetId,
-          companyName,
-          hrEmail,
-          requesterName,
-          requesterEmail,
-          assetType,
-          assetImage,
-          assetName,
-        } = req.body;
+        const assetId = req.params.id;
 
-        const requestedAssetId = req.params.id;
         const processedByEmail = req.decoded_email;
 
         const approvedAsset = await requestCollection.findOne({
-          _id: new ObjectId(requestedAssetId),
+          assetId: assetId,
         });
 
         if (!approvedAsset) {
@@ -306,12 +297,15 @@ async function run() {
           });
         }
 
-        const hrUser = await usersCollection.findOne({ email: hrEmail });
+        const hrUser = await usersCollection.findOne({
+          email: processedByEmail,
+        });
+
         const asset = await assetCollection.findOne({
           _id: new ObjectId(assetId),
         });
 
-        if (!asset || asset.availableQuantity <= 0) {
+        if (!asset || asset?.availableQuantity <= 0) {
           return res.status(404).send({
             success: false,
             message: "Asset out of stock ",
@@ -326,14 +320,14 @@ async function run() {
         }
 
         const assignedAsset = {
-          assetId,
-          assetName,
-          assetImage,
-          assetType,
-          employeeEmail: requesterEmail,
-          employeeName: requesterName,
-          hrEmail,
-          companyName,
+          assetId: approvedAsset.assetId,
+          assetName: approvedAsset.assetName,
+          assetImage: approvedAsset.assetImage,
+          assetType: approvedAsset.assetType,
+          employeeEmail: approvedAsset.requesterEmail,
+          employeeName: approvedAsset.requesterName,
+          hrEmail: processedByEmail,
+          companyName: approvedAsset.companyName,
           assignmentDate: new Date(),
           returnDate: null,
           status: "assigned",
@@ -350,26 +344,27 @@ async function run() {
           $set: {
             requestStatus: "approved",
             approvedDate: new Date(),
-            processedBh: processedByEmail,
+            processedBy: processedByEmail,
           },
         };
 
         await requestCollection.updateOne(
-          { _id: new ObjectId(requestedAssetId) },
+          { assetId: assetId },
           requestedAssetUpdateInfo
         );
 
         const affiliation = await employeeAffiliationsCollection.findOne({
-          employeeEmail: requesterEmail,
-          hrEmail,
+          employeeEmail: approvedAsset.requesterEmail,
+          processedByEmail,
         });
 
         if (!affiliation) {
           const affiliationInfo = {
-            employeeEmail: requesterEmail,
-            employeeName: requesterName,
-            hrEmail: hrEmail,
-            companyName: companyName,
+            employeeEmail: approvedAsset.requesterEmail,
+            employeeName: approvedAsset.requesterName,
+
+            hrEmail: processedByEmail,
+            companyName: approvedAsset.companyName,
             companyLogo: hrUser.companyLogo,
             affiliationDate: new Date(),
             status: "active",
@@ -377,7 +372,7 @@ async function run() {
           await employeeAffiliationsCollection.insertOne(affiliationInfo);
 
           await usersCollection.updateOne(
-            { email: hrEmail },
+            { email: processedByEmail },
             {
               $inc: {
                 currentEmployees: 1,
@@ -400,11 +395,31 @@ async function run() {
       }
     });
 
-    // ✔ THIS WAS MISSING (BRACKET FIXED)
+    //  Payment related api is here /
+    // 
+    // 
+
+    app.get("/packages",verifyFToken,async (req,res)=>{
+        try {
+          const result = await packagesCollection.find().toArray();
+          res.status(200).send({
+            success: true,
+            message: "Data get successful ",
+            data: result,
+          });
+        } catch (error) {
+          console.error(error);
+          res.status(500).send({
+            success: false,
+            message: "Internal server error ",
+          });
+        }
+
+    })
+
     await client.db("admin").command({ ping: 1 });
     console.log("Connected to MongoDB successfully!");
   } finally {
-    // optional close
   }
 }
 
