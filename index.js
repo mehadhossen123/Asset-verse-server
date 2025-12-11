@@ -222,7 +222,7 @@ async function run() {
       }
     });
 
-    app.patch("/assets/:id",  async (req, res) => {
+    app.patch("/assets/:id", async (req, res) => {
       try {
         const id = req.params.id;
         console.log(id);
@@ -245,27 +245,25 @@ async function run() {
       }
     });
 
+    app.delete("/assets/:id", verifyFToken, async (req, res) => {
+      try {
+        const id = req.params.id;
+        const result = await assetCollection.deleteOne({
+          _id: new ObjectId(id),
+        });
+        res.status(200).send({
+          success: true,
+          message: "Asset Deleted",
+          data: result,
+        });
+      } catch (error) {
+        res.status(500).send({
+          success: false,
+          message: "Internal server error ",
+        });
+      }
+    });
 
-    app.delete("/assets/:id",verifyFToken,async(req,res)=>{
-       try {
-         const id = req.params.id;
-         const result = await assetCollection.deleteOne({
-           _id: new ObjectId(id),
-         });
-         res.status(200).send({
-           success: true,
-           message: "Asset Deleted",
-           data: result,
-         });
-       } catch (error) {
-         res.status(500).send({
-           success: false,
-           message: "Internal server error ",
-         });
-       }
-         
-    })
-    
     // { ******* ASSet request related api ********* }
 
     app.post("/requests", verifyFToken, async (req, res) => {
@@ -301,7 +299,7 @@ async function run() {
 
         const result = await requestCollection
           .find(query)
-          .sort({ dateAdded: -1 })
+          .sort({ dateAdded: -1, requestDate:-1 })
           .toArray();
 
         res.status(200).send({
@@ -438,52 +436,92 @@ async function run() {
         });
       }
     });
-     app.delete("/requests/:id", verifyFToken, async (req, res) => {
-       try {
-         const id = req.params.id;
-         const result = await requestCollection.deleteOne({
-           _id: new ObjectId(id),
-         });
-         res.status(200).send({
-           success: true,
-           message: "Asset Deleted",
-           data: result,
-         });
-       } catch (error) {
-         res.status(500).send({
-           success: false,
-           message: "Internal server error ",
-         });
-       }
-     });
+    app.delete("/requests/:id", verifyFToken, async (req, res) => {
+      try {
+        const id = req.params.id;
+        const result = await requestCollection.deleteOne({
+          _id: new ObjectId(id),
+        });
+        res.status(200).send({
+          success: true,
+          message: "Asset Deleted",
+          data: result,
+        });
+      } catch (error) {
+        res.status(500).send({
+          success: false,
+          message: "Internal server error ",
+        });
+      }
+    });
+    // assigned asset related api .???? ///////
 
-    //  Payment related api is here /
-    // 
-    // 
+    app.get("/requests/asset", verifyFToken, async (req, res) => {
+      try {
+        const decoded_email = req.decoded_email;
+        const userEmail = req.query.email;
+        const status = req.query.requestStatus;
+        console.log(userEmail, status);
+        const query = {
+          requesterEmail: userEmail,
+          requestStatus: status,
+        };
 
-    app.get("/packages",async (req,res)=>{
-        try {
-          const result = await packagesCollection.find().toArray();
-          res.status(200).send({
-            success: true,
-            message: "Data get successful ",
-            data: result,
-          });
-        } catch (error) {
-          console.error(error);
-          res.status(500).send({
+        if (userEmail !== decoded_email) {
+          return res.status(400).send({
             success: false,
-            message: "Internal server error ",
+            message: "Unauthorized accessed",
           });
         }
 
-    })
+        const result = await requestCollection
+          .find(query)
+          .sort({
+            approvedDate: -1,
+          })
+          .toArray();
+
+        res.status(200).send({
+          success: true,
+          message: "Asset get successfully",
+          data: result,
+        });
+      } catch (error) {
+        console.log(error);
+        res.status(500).send({
+          success: false,
+          message: "Internal server error",
+        });
+      }
+    });
+
+    //  Payment related api is here /
+    //
+    //
+
+    app.get("/packages", async (req, res) => {
+      try {
+        const result = await packagesCollection.find().toArray();
+        res.status(200).send({
+          success: true,
+          message: "Data get successful ",
+          data: result,
+        });
+      } catch (error) {
+        console.error(error);
+        res.status(500).send({
+          success: false,
+          message: "Internal server error ",
+        });
+      }
+    });
 
     await client.db("admin").command({ ping: 1 });
     console.log("Connected to MongoDB successfully!");
   } finally {
   }
 }
+
 
 run().catch(console.dir);
 
