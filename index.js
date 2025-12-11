@@ -222,6 +222,50 @@ async function run() {
       }
     });
 
+    app.patch("/assets/:id",  async (req, res) => {
+      try {
+        const id = req.params.id;
+        console.log(id);
+        const query = { _id: new ObjectId(id) };
+        const updatedBody = req.body;
+        const updatedDoc = {
+          $set: updatedBody,
+        };
+        const result = await assetCollection.updateOne(query, updatedDoc);
+        res.status(200).send({
+          success: true,
+          message: "Asset Edit Successful",
+          data: result,
+        });
+      } catch (error) {
+        res.status(500).send({
+          success: false,
+          message: "Internal server error ",
+        });
+      }
+    });
+
+
+    app.delete("/assets/:id",verifyFToken,async(req,res)=>{
+       try {
+         const id = req.params.id;
+         const result = await assetCollection.deleteOne({
+           _id: new ObjectId(id),
+         });
+         res.status(200).send({
+           success: true,
+           message: "Asset Deleted",
+           data: result,
+         });
+       } catch (error) {
+         res.status(500).send({
+           success: false,
+           message: "Internal server error ",
+         });
+       }
+         
+    })
+    
     // { ******* ASSet request related api ********* }
 
     app.post("/requests", verifyFToken, async (req, res) => {
@@ -394,12 +438,30 @@ async function run() {
         });
       }
     });
+     app.delete("/requests/:id", verifyFToken, async (req, res) => {
+       try {
+         const id = req.params.id;
+         const result = await requestCollection.deleteOne({
+           _id: new ObjectId(id),
+         });
+         res.status(200).send({
+           success: true,
+           message: "Asset Deleted",
+           data: result,
+         });
+       } catch (error) {
+         res.status(500).send({
+           success: false,
+           message: "Internal server error ",
+         });
+       }
+     });
 
     //  Payment related api is here /
     // 
     // 
 
-    app.get("/packages",verifyFToken,async (req,res)=>{
+    app.get("/packages",async (req,res)=>{
         try {
           const result = await packagesCollection.find().toArray();
           res.status(200).send({
