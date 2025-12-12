@@ -458,10 +458,11 @@ async function run() {
 
     app.get("/requests/asset", verifyFToken, async (req, res) => {
       try {
+        searchText = req.query.searchText;
         const decoded_email = req.decoded_email;
         const userEmail = req.query.email;
         const status = req.query.requestStatus;
-        console.log(userEmail, status);
+       
         const query = {
           requesterEmail: userEmail,
           requestStatus: status,
@@ -473,6 +474,13 @@ async function run() {
             message: "Unauthorized accessed",
           });
         }
+       
+        if(searchText){
+            query.assetName={$regex:searchText,$options:"i"}
+
+
+        }
+       
 
         const result = await requestCollection
           .find(query)
