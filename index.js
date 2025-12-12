@@ -183,44 +183,86 @@ async function run() {
       }
     });
 
-    app.get("/assets", verifyFToken, async (req, res) => {
-      try {
-        const decoded_email = req.decoded_email;
-        const hrEmail = req.query.email;
-        const query = { hrEmail };
-        let result = [];
+    // app.get("/assets", verifyFToken, async (req, res) => {
+    //   try {
+    //     const decoded_email = req.decoded_email;
+    //     const userEmail = req.query.email;
+    //     const query = {  };
+       
+    //     const searchText=req.query.searchText
+       
 
-        if (hrEmail) {
-          if (hrEmail !== decoded_email) {
-            return res.status(400).send({
-              success: false,
-              message: "Unauthorized accessed",
-            });
-          }
+    //     if (userEmail) {
+    //       if (userEmail !== decoded_email) {
+    //         return res.status(400).send({
+    //           success: false,
+    //           message: "Unauthorized accessed",
+    //         });
+    //       }
+         
+    //       if(searchText){
+    //         query.productName = { $regex: searchText, $options: "i" };
+    //       }
 
-          result = await assetCollection
-            .find(query)
-            .sort({ dateAdded: -1 })
-            .toArray();
-        } else {
-          result = await assetCollection
-            .find()
-            .sort({ dateAdded: -1 })
-            .toArray();
-        }
+    //       result = await assetCollection
+    //         .find(query)
+    //         .sort({ dateAdded: -1 })
+    //         .toArray();
+    //     } 
+    //     else {
+    //       result = await assetCollection
+    //         .find()
+    //         .sort({ dateAdded: -1 }).limit(8)
+    //         .toArray();
+    //     }
 
-        res.status(200).send({
-          success: true,
-          message: "Asset get successfully",
-          data: result,
-        });
-      } catch (error) {
-        res.status(500).send({
-          success: false,
-          message: "Internal server error",
-        });
-      }
+    //     res.status(200).send({
+    //       success: true,
+    //       message: "Asset get successfully",
+    //       data: result,
+    //     });
+    //   } catch (error) {
+    //     res.status(500).send({
+    //       success: false,
+    //       message: "Internal server error",
+    //     });
+    //   }
+    // });
+ 
+app.get("/assets", async (req, res) => {
+  try {
+    const {limit=0,skip=0,search}=req.query;
+    console.log(search)
+   
+    const query={}
+ if(search)
+ {
+  query.productName={$regex:search,$options:"i"}
+
+ }
+    const result = await assetCollection
+      .find(query)
+      .sort({ dateAdded: -1 })
+      .limit(Number(limit))
+      .skip(Number(skip))
+      .toArray();
+      const count= await assetCollection.countDocuments(query)
+
+    res.status(200).send({
+      success: true,
+      message: "Assets fetched successfully",
+
+      data: result,
+      total: count,
     });
+  } catch (error) {
+    res.status(500).send({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+});
+
 
     app.patch("/assets/:id", async (req, res) => {
       try {
