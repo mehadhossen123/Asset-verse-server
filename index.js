@@ -307,6 +307,7 @@ app.get("/assets", async (req, res) => {
     });
 
     // { ******* ASSet request related api ********* }
+    
 
     app.post("/requests", verifyFToken, async (req, res) => {
       try {
@@ -545,6 +546,9 @@ app.get("/assets", async (req, res) => {
       }
     });
 
+
+   
+
     //  Payment related api is here /
     //
     //
@@ -565,6 +569,61 @@ app.get("/assets", async (req, res) => {
         });
       }
     });
+
+//  Affiliation related api 
+
+ app.get("/affiliations", verifyFToken, async (req, res) => {
+   try {
+     searchText = req.query.searchText;
+     const decoded_email = req.decoded_email;
+     const userEmail = req.query.email;
+
+     const query = {
+       hrEmail: userEmail,
+     };
+
+     if (userEmail !== decoded_email) {
+       return res.status(400).send({
+         success: false,
+         message: "Unauthorized accessed",
+       });
+     }
+
+     if (searchText) {
+       query.employeeName = { $regex: searchText, $options: "i" };
+     }
+
+     const result = await employeeAffiliationsCollection.find(query).toArray();
+
+     res.status(200).send({
+       success: true,
+       message: "Asset get successfully",
+       data: result,
+     });
+   } catch (error) {
+     res.status(500).send({
+       success: false,
+       message: "Internal server error",
+     });
+   }
+ });
+
+
+//  Delete employee 
+app.delete("/affiliations/:id",verifyFToken,async(req,res)=>{
+  try {
+    const id = req.params.id;
+    const query = { _id: new ObjectId(id) };
+    const result = await employeeAffiliationsCollection.deleteOne(query);
+    res.send(result)
+  } 
+  catch (error) {
+    res.status(500).send({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+});
 
     await client.db("admin").command({ ping: 1 });
     console.log("Connected to MongoDB successfully!");
