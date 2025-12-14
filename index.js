@@ -54,15 +54,44 @@ const verifyFToken = async (req, res, next) => {
 async function run() {
   try {
     await client.connect();
-
+    
     const database = client.db("Asset_verse_db");
     const usersCollection = database.collection("users");
     const assetCollection = database.collection("assets");
     const requestCollection = database.collection("requests");
     const assignedAssetCollection = database.collection("assignedAssets");
+   
     const employeeAffiliationsCollection = database.collection("affiliations");
     const packagesCollection = database.collection("packages");
 
+    /* =============================
+       🔹 ASSIGNED ASSETS RELATED  API
+    ============================== */
+
+app.get("/assignedAssets/uniqueCompany", async (req, res) => {
+  try {
+    const companyName = await assignedAssetCollection.aggregate([
+     {
+      $group:{_id:{$toLower:"$companyName"}}
+     },{
+      $project:{_id:0,companyName:"$_id"}
+
+     }
+
+    ]).toArray()
+    res.status(200).send({
+      success: true,
+      message: "Successful ",
+      data:companyName,
+    });
+  } catch (error) {
+    console.log(error)
+    res.status(500).send({
+      success: false,
+      message: "Internal server error ",
+    });
+  }
+});
     /* =============================
        🔹 USERS API
     ============================== */
@@ -188,9 +217,8 @@ async function run() {
     //     const decoded_email = req.decoded_email;
     //     const userEmail = req.query.email;
     //     const query = {  };
-       
+
     //     const searchText=req.query.searchText
-       
 
     //     if (userEmail) {
     //       if (userEmail !== decoded_email) {
@@ -199,7 +227,7 @@ async function run() {
     //           message: "Unauthorized accessed",
     //         });
     //       }
-         
+
     //       if(searchText){
     //         query.productName = { $regex: searchText, $options: "i" };
     //       }
@@ -208,7 +236,7 @@ async function run() {
     //         .find(query)
     //         .sort({ dateAdded: -1 })
     //         .toArray();
-    //     } 
+    //     }
     //     else {
     //       result = await assetCollection
     //         .find()
@@ -228,41 +256,38 @@ async function run() {
     //     });
     //   }
     // });
- 
-app.get("/assets", async (req, res) => {
-  try {
-    const {limit=0,skip=0,search}=req.query;
-    console.log(search)
-   
-    const query={}
- if(search)
- {
-  query.productName={$regex:search,$options:"i"}
 
- }
-    const result = await assetCollection
-      .find(query)
-      .sort({ dateAdded: -1 })
-      .limit(Number(limit))
-      .skip(Number(skip))
-      .toArray();
-      const count= await assetCollection.countDocuments(query)
+    app.get("/assets", async (req, res) => {
+      try {
+        const { limit = 0, skip = 0, search } = req.query;
+        console.log(search);
 
-    res.status(200).send({
-      success: true,
-      message: "Assets fetched successfully",
+        const query = {};
+        if (search) {
+          query.productName = { $regex: search, $options: "i" };
+        }
+        const result = await assetCollection
+          .find(query)
+          .sort({ dateAdded: -1 })
+          .limit(Number(limit))
+          .skip(Number(skip))
+          .toArray();
+        const count = await assetCollection.countDocuments(query);
 
-      data: result,
-      total: count,
+        res.status(200).send({
+          success: true,
+          message: "Assets fetched successfully",
+
+          data: result,
+          total: count,
+        });
+      } catch (error) {
+        res.status(500).send({
+          success: false,
+          message: "Internal server error",
+        });
+      }
     });
-  } catch (error) {
-    res.status(500).send({
-      success: false,
-      message: "Internal server error",
-    });
-  }
-});
-
 
     app.patch("/assets/:id", async (req, res) => {
       try {
@@ -307,7 +332,6 @@ app.get("/assets", async (req, res) => {
     });
 
     // { ******* ASSet request related api ********* }
-    
 
     app.post("/requests", verifyFToken, async (req, res) => {
       try {
@@ -342,7 +366,7 @@ app.get("/assets", async (req, res) => {
 
         const result = await requestCollection
           .find(query)
-          .sort({ dateAdded: -1, requestDate:-1 })
+          .sort({ dateAdded: -1, requestDate: -1 })
           .toArray();
 
         res.status(200).send({
@@ -505,7 +529,7 @@ app.get("/assets", async (req, res) => {
         const decoded_email = req.decoded_email;
         const userEmail = req.query.email;
         const status = req.query.requestStatus;
-       
+
         const query = {
           requesterEmail: userEmail,
           requestStatus: status,
@@ -517,13 +541,10 @@ app.get("/assets", async (req, res) => {
             message: "Unauthorized accessed",
           });
         }
-       
-        if(searchText){
-            query.assetName={$regex:searchText,$options:"i"}
 
-
+        if (searchText) {
+          query.assetName = { $regex: searchText, $options: "i" };
         }
-       
 
         const result = await requestCollection
           .find(query)
@@ -546,9 +567,6 @@ app.get("/assets", async (req, res) => {
       }
     });
 
-
-   
-
     //  Payment related api is here /
     //
     //
@@ -570,60 +588,60 @@ app.get("/assets", async (req, res) => {
       }
     });
 
-//  Affiliation related api 
+    //  Affiliation related api
 
- app.get("/affiliations", verifyFToken, async (req, res) => {
-   try {
-     searchText = req.query.searchText;
-     const decoded_email = req.decoded_email;
-     const userEmail = req.query.email;
+    app.get("/affiliations", verifyFToken, async (req, res) => {
+      try {
+        searchText = req.query.searchText;
+        const decoded_email = req.decoded_email;
+        const userEmail = req.query.email;
 
-     const query = {
-       hrEmail: userEmail,
-     };
+        const query = {
+          hrEmail: userEmail,
+        };
 
-     if (userEmail !== decoded_email) {
-       return res.status(400).send({
-         success: false,
-         message: "Unauthorized accessed",
-       });
-     }
+        if (userEmail !== decoded_email) {
+          return res.status(400).send({
+            success: false,
+            message: "Unauthorized accessed",
+          });
+        }
 
-     if (searchText) {
-       query.employeeName = { $regex: searchText, $options: "i" };
-     }
+        if (searchText) {
+          query.employeeName = { $regex: searchText, $options: "i" };
+        }
 
-     const result = await employeeAffiliationsCollection.find(query).toArray();
+        const result = await employeeAffiliationsCollection
+          .find(query)
+          .toArray();
 
-     res.status(200).send({
-       success: true,
-       message: "Asset get successfully",
-       data: result,
-     });
-   } catch (error) {
-     res.status(500).send({
-       success: false,
-       message: "Internal server error",
-     });
-   }
- });
-
-
-//  Delete employee 
-app.delete("/affiliations/:id",verifyFToken,async(req,res)=>{
-  try {
-    const id = req.params.id;
-    const query = { _id: new ObjectId(id) };
-    const result = await employeeAffiliationsCollection.deleteOne(query);
-    res.send(result)
-  } 
-  catch (error) {
-    res.status(500).send({
-      success: false,
-      message: "Internal server error",
+        res.status(200).send({
+          success: true,
+          message: "Asset get successfully",
+          data: result,
+        });
+      } catch (error) {
+        res.status(500).send({
+          success: false,
+          message: "Internal server error",
+        });
+      }
     });
-  }
-});
+
+    //  Delete employee
+    app.delete("/affiliations/:id", verifyFToken, async (req, res) => {
+      try {
+        const id = req.params.id;
+        const query = { _id: new ObjectId(id) };
+        const result = await employeeAffiliationsCollection.deleteOne(query);
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({
+          success: false,
+          message: "Internal server error",
+        });
+      }
+    });
 
     await client.db("admin").command({ ping: 1 });
     console.log("Connected to MongoDB successfully!");
