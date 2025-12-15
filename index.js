@@ -2,6 +2,8 @@ const express = require("express");
 const cors = require("cors");
 require("dotenv").config();
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
+const stripe = require("stripe")(process.env.STRIPE_KEY);
+
 const admin = require("firebase-admin");
 
 const app = express();
@@ -54,100 +56,97 @@ const verifyFToken = async (req, res, next) => {
 async function run() {
   try {
     await client.connect();
-    
+
     const database = client.db("Asset_verse_db");
     const usersCollection = database.collection("users");
     const assetCollection = database.collection("assets");
     const requestCollection = database.collection("requests");
     const assignedAssetCollection = database.collection("assignedAssets");
-   
+
     const employeeAffiliationsCollection = database.collection("affiliations");
     const packagesCollection = database.collection("packages");
 
     /* =============================
        🔹 Payment  RELATED  API
     ============================== */
-    app.get("/packages/:id",verifyFToken,async(req,res)=>{
-      try{
-        const id=req.params.id;
-        const query={_id:new ObjectId(id)};
-        const result=await packagesCollection.findOne(query)
+    app.get("/packages/:id", async (req, res) => {
+      try {
+        const id = req.params.id;
+        const query = { _id: new ObjectId(id) };
+        const result = await packagesCollection.findOne(query);
         res.status(200).send({
-          success:true,
-          message:"successful",
-          data:result
-        })
-
-      }
-      catch(error){
+          success: true,
+          message: "successful",
+          data: result,
+        });
+      } catch (error) {
         res.status(500).send({
           success: false,
           message: "Internal server error ",
         });
-
       }
     });
     /* =============================
        🔹 ASSIGNED ASSETS RELATED  API
     ============================== */
 
-app.get("/affiliations/uniqueCompany", async (req, res) => {
-  try {
-    const companyName = await employeeAffiliationsCollection
-      .aggregate([
-        {
-          $group: { _id: "$companyName" },
-        },
-        {
-          $project: { _id: 0, companyName: "$_id" },
-        },
-      ])
-      .toArray();
-    res.status(200).send({
-      success: true,
-      message: "Successful ",
-      data: companyName,
+    app.get("/affiliations/uniqueCompany", async (req, res) => {
+      try {
+        const companyName = await employeeAffiliationsCollection
+          .aggregate([
+            {
+              $group: { _id: "$companyName" },
+            },
+            {
+              $project: { _id: 0, companyName: "$_id" },
+            },
+          ])
+          .toArray();
+        res.status(200).send({
+          success: true,
+          message: "Successful ",
+          data: companyName,
+        });
+      } catch (error) {
+        console.log(error);
+        res.status(500).send({
+          success: false,
+          message: "Internal server error ",
+        });
+      }
     });
-  } catch (error) {
-    console.log(error);
-    res.status(500).send({
-      success: false,
-      message: "Internal server error ",
-    });
-  }
-});
 
-app.get("/affiliations", async (req, res) => {
-  try {
-    const companyName = req.query.companyName;
-   
-    if (!companyName) {
-      return res.status(400).send({
-        success: false,
-        message: "Company name not found ",
-      });
-    }
-    const result = await employeeAffiliationsCollection
-      .aggregate([
-        { $match: { companyName } },
-        { $group: { _id: "$employeeEmail", doc: { $first: "$$ROOT" } } },
-        { $replaceRoot: { newRoot: "$doc" } },
-      ])
-      .toArray();
+    app.get("/affiliations", async (req, res) => {
+      try {
+        const companyName = req.query.companyName;
 
-    res.status(200).send({
-      success: true,
-      message: "Data get successful",
-      data: result,
+        if (!companyName) {
+          return res.status(400).send({
+            success: false,
+            message: "Company name not found ",
+          });
+        }
+        const result = await employeeAffiliationsCollection
+          .aggregate([
+            { $match: { companyName } },
+            { $group: { _id: "$employeeEmail", doc: { $first: "$$ROOT" } } },
+            { $replaceRoot: { newRoot: "$doc" } },
+          ])
+          .toArray();
+
+        res.status(200).send({
+          success: true,
+          message: "Data get successful",
+          data: result,
+        });
+      } catch (error) {
+        console.log(error);
+        res.status(500).send({
+          success: false,
+          message: "Internal server error ",
+        });
+      }
     });
-  } catch (error) {
-    console.log(error);
-    res.status(500).send({
-      success: false,
-      message: "Internal server error ",
-    });
-  }
-});
 
     /* =============================
        🔹 USERS API
@@ -529,7 +528,7 @@ app.get("/affiliations", async (req, res) => {
           const affiliationInfo = {
             employeeEmail: approvedAsset.requesterEmail,
             employeeName: approvedAsset.requesterName,
-            employeeImage:approvedAsset.requesterPhoto,
+            employeeImage: approvedAsset.requesterPhoto,
             hrEmail: processedByEmail,
             companyName: approvedAsset.companyName,
             companyLogo: hrUser.companyLogo,
@@ -706,7 +705,6 @@ app.get("/affiliations", async (req, res) => {
   } finally {
   }
 }
-
 
 run().catch(console.dir);
 
