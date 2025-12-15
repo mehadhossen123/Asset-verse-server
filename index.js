@@ -65,33 +65,90 @@ async function run() {
     const packagesCollection = database.collection("packages");
 
     /* =============================
+       🔹 Payment  RELATED  API
+    ============================== */
+    app.get("/packages/:id",verifyFToken,async(req,res)=>{
+      try{
+        const id=req.params.id;
+        const query={_id:new ObjectId(id)};
+        const result=await packagesCollection.findOne(query)
+        res.status(200).send({
+          success:true,
+          message:"successful",
+          data:result
+        })
+
+      }
+      catch(error){
+        res.status(500).send({
+          success: false,
+          message: "Internal server error ",
+        });
+
+      }
+    });
+    /* =============================
        🔹 ASSIGNED ASSETS RELATED  API
     ============================== */
 
-app.get("/assignedAssets/uniqueCompany", async (req, res) => {
+app.get("/affiliations/uniqueCompany", async (req, res) => {
   try {
-    const companyName = await assignedAssetCollection.aggregate([
-     {
-      $group:{_id:{$toLower:"$companyName"}}
-     },{
-      $project:{_id:0,companyName:"$_id"}
-
-     }
-
-    ]).toArray()
+    const companyName = await employeeAffiliationsCollection
+      .aggregate([
+        {
+          $group: { _id: "$companyName" },
+        },
+        {
+          $project: { _id: 0, companyName: "$_id" },
+        },
+      ])
+      .toArray();
     res.status(200).send({
       success: true,
       message: "Successful ",
-      data:companyName,
+      data: companyName,
     });
   } catch (error) {
-    console.log(error)
+    console.log(error);
     res.status(500).send({
       success: false,
       message: "Internal server error ",
     });
   }
 });
+
+app.get("/affiliations", async (req, res) => {
+  try {
+    const companyName = req.query.companyName;
+   
+    if (!companyName) {
+      return res.status(400).send({
+        success: false,
+        message: "Company name not found ",
+      });
+    }
+    const result = await employeeAffiliationsCollection
+      .aggregate([
+        { $match: { companyName } },
+        { $group: { _id: "$employeeEmail", doc: { $first: "$$ROOT" } } },
+        { $replaceRoot: { newRoot: "$doc" } },
+      ])
+      .toArray();
+
+    res.status(200).send({
+      success: true,
+      message: "Data get successful",
+      data: result,
+    });
+  } catch (error) {
+    console.log(error);
+    res.status(500).send({
+      success: false,
+      message: "Internal server error ",
+    });
+  }
+});
+
     /* =============================
        🔹 USERS API
     ============================== */
@@ -464,14 +521,15 @@ app.get("/assignedAssets/uniqueCompany", async (req, res) => {
 
         const affiliation = await employeeAffiliationsCollection.findOne({
           employeeEmail: approvedAsset.requesterEmail,
-          processedByEmail,
+          hrEmail: processedByEmail,
+          companyName: approvedAsset.companyName,
         });
 
         if (!affiliation) {
           const affiliationInfo = {
             employeeEmail: approvedAsset.requesterEmail,
             employeeName: approvedAsset.requesterName,
-
+            employeeImage:approvedAsset.requesterPhoto,
             hrEmail: processedByEmail,
             companyName: approvedAsset.companyName,
             companyLogo: hrUser.companyLogo,
@@ -590,7 +648,7 @@ app.get("/assignedAssets/uniqueCompany", async (req, res) => {
 
     //  Affiliation related api
 
-    app.get("/affiliations", verifyFToken, async (req, res) => {
+    app.get("/affiliations/myEmployee", verifyFToken, async (req, res) => {
       try {
         searchText = req.query.searchText;
         const decoded_email = req.decoded_email;
