@@ -15,6 +15,7 @@ app.use(cors());
 
 // Firebase Admin Initialization
 const serviceAccount = require("./asset-verse.json");
+const { Transaction } = require("firebase-admin/firestore");
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
@@ -65,27 +66,123 @@ async function run() {
 
     const employeeAffiliationsCollection = database.collection("affiliations");
     const packagesCollection = database.collection("packages");
+    const paymentCollection=database.collection("payments")
 
     /* =============================
        🔹 Payment  RELATED  API
     ============================== */
-    app.get("/packages/:id", async (req, res) => {
+   
+
+    // stripe related api
+    app.post("/create-checkout-session", async (req, res) => {
       try {
-        const id = req.params.id;
-        const query = { _id: new ObjectId(id) };
-        const result = await packagesCollection.findOne(query);
-        res.status(200).send({
-          success: true,
-          message: "successful",
-          data: result,
+        const paymentInfo = req.body;
+
+        const amount = Math.round(Number(paymentInfo.price) * 100);
+        
+
+        const session = await stripe.checkout.sessions.create({
+          line_items: [
+            {
+              price_data: {
+                currency: "usd",
+                unit_amount: amount,
+                product_data: {
+                  name: paymentInfo.packageName,
+                },
+              },
+              quantity: 1,
+            },
+          ],
+          metadata: {
+            packageId: paymentInfo.packageId,
+            hrEmail: paymentInfo.hrEmail,
+          },
+
+          mode: "payment",
+          customer_email: paymentInfo.hrEmail,
+
+          success_url: `${process.env.SITE_DOMAIN}/dashboard/payment-success?session_id={CHECKOUT_SESSION_ID}`,
+          cancel_url: `${process.env.SITE_DOMAIN}/dashboard/payment-canceled`,
         });
+
+        res.send({ url: session.url });
       } catch (error) {
+        console.error(error);
         res.status(500).send({
           success: false,
-          message: "Internal server error ",
+          message: "Internal server error",
         });
       }
     });
+
+
+
+app.patch("/payment-success",async(req, res)=>{
+ 
+    try {
+       const sessionId = req.query.session_id;
+       if (!sessionId) {
+         return res.status(400).send({
+           success: false,
+           message: "Session id is missing ",
+         });
+       }
+     
+      const session = await stripe.checkout.sessions.retrieve(sessionId);
+      console.log("after retrieve session ", session);
+      
+      
+      if (session.payment_status === "paid") {
+        const packageId = session.metadata.packageId;
+        const hrEmail = session.metadata.hrEmail;
+        const getPackage = await packagesCollection.findOne({
+          _id: new ObjectId(packageId),
+        });
+
+        const newEmployeeLimit = getPackage.employeeLimit;
+        const newPackageName = getPackage.name;
+
+        const getUser = await usersCollection.updateOne(
+          { email: hrEmail },
+          {
+            $set: {
+              subscription: newPackageName,
+
+              packageLimit: newEmployeeLimit,
+            },
+          }
+        );
+        const existingPayment = await paymentCollection.findOne({
+          transactionId: session.payment_intent,
+        });
+        let result;
+        if (!existingPayment) {
+          const insertPayment = {
+            hrEmail: hrEmail,
+            packageName: newPackageName,
+            employeeLimit: newEmployeeLimit,
+            amount: parseInt(session.amount_total / 100),
+            transactionId: session.payment_intent,
+            paymentDate: new Date(),
+            status: session.payment_status,
+          };
+         result= await paymentCollection.insertOne(insertPayment);
+        }
+
+        res.send({ success: true, data: result });
+      }
+    } catch (error) {
+      console.error("Payment success error:", error);
+      res.status(500).send({ success: false });
+    }
+     
+})
+
+
+
+
+    
     /* =============================
        🔹 ASSIGNED ASSETS RELATED  API
     ============================== */
