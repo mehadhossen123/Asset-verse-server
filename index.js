@@ -9,12 +9,23 @@ const admin = require("firebase-admin");
 const app = express();
 const port = process.env.PORT || 3000;
 
+
 // Middlewares
 app.use(express.json());
 app.use(cors());
+app.use(
+  cors({
+    origin: ["https://asset-verse-track.web.app"],
+    credentials: true,
+  })
+);
 
 // Firebase Admin Initialization
-const serviceAccount = require("./asset-verse.json");
+// const serviceAccount = require("./asset-verse.json");
+// // const serviceAccount = require("./firebase-admin-key.json");
+
+const decoded = Buffer.from(process.env.FB_SERVICE_KEY, 'base64').toString('utf8')
+const serviceAccount = JSON.parse(decoded);
 const { Transaction } = require("firebase-admin/firestore");
 
 admin.initializeApp({
@@ -56,7 +67,7 @@ const verifyFToken = async (req, res, next) => {
 
 async function run() {
   try {
-    await client.connect();
+    // await client.connect();
 
     const database = client.db("Asset_verse_db");
     const usersCollection = database.collection("users");
@@ -882,8 +893,8 @@ app.get("/payments",verifyFToken,async(req,res)=>{
     });
    
 
-    await client.db("admin").command({ ping: 1 });
-    console.log("Connected to MongoDB successfully!");
+    // await client.db("admin").command({ ping: 1 });
+    // console.log("Connected to MongoDB successfully!");
   } finally {
   }
 }
