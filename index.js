@@ -178,6 +178,33 @@ app.patch("/payment-success",async(req, res)=>{
     }
      
 })
+// find payment history 
+app.get("/payments",verifyFToken,async(req,res)=>{
+ try {
+   const decoded_email = req.decoded_email;
+   const userEmail = req.query.email;
+
+   if (decoded_email != userEmail) {
+     return res.status(400).send({
+       success: false,
+       message: "Unauthorized access ",
+     });
+   }
+   const query={hrEmail:userEmail}
+   const result=await paymentCollection.find(query).sort({paymentDate:-1}).toArray()
+   res.status(200).send({
+    success:true,
+    message:"Payment history get successful",
+    data:result
+   })
+ } catch (error) {
+   console.error(error);
+   res.status(500).send({
+     success: false,
+     message: "Internal server error",
+   });
+ }
+});
 
 
 
@@ -365,59 +392,86 @@ app.patch("/payment-success",async(req, res)=>{
       }
     });
 
-    // app.get("/assets", verifyFToken, async (req, res) => {
-    //   try {
-    //     const decoded_email = req.decoded_email;
-    //     const userEmail = req.query.email;
-    //     const query = {  };
+  //  hr asset states
+  app.get('/hr/asset-stats',verifyFToken,async(req,res)=>{
+    try{
+      const hrEmail=req.query.email;
+      const decoded_email=req.decoded_email;
+      if(hrEmail!==decoded_email){
+        return res.status(401).send({
+          success:false,
+          message:"Unauthorized access",
 
-    //     const searchText=req.query.searchText
 
-    //     if (userEmail) {
-    //       if (userEmail !== decoded_email) {
-    //         return res.status(400).send({
-    //           success: false,
-    //           message: "Unauthorized accessed",
-    //         });
-    //       }
+        })
+      }
+      const result=await assetCollection.aggregate([
+        {$match:{hrEmail}},
+        {
+          $group:{_id:"$productType",count:{$sum:1}}
+        }
+      ]).toArray()
+      res.status(200).send({
+        success:true,
+        message:"Data get successful",
+        data:result
+      })
+    }
+    catch(error){
+      res.status(500).send({
+        success:false,
+        message:"something went wrong "
+      })
+    }
+    
+  })
+  // employee assets states
+   app.get("/employee/asset-request", verifyFToken, async (req, res) => {
+     try {
+       const userEmail= req.query.email;
+       const decoded_email = req.decoded_email;
+       if (userEmail !== decoded_email) {
+         return res.status(401).send({
+           success: false,
+           message: "Unauthorized access",
+         });
+       }
+       const result = await requestCollection
+         .aggregate([
+           {
+             $match: {
+               requesterEmail: userEmail,
+             },
+           },
+           {
+             $group: { _id: "$assetName", count: { $sum: 1 } },
+           },
+         ])
+         .toArray();
+       res.status(200).send({
+         success: true,
+         message: "Data get successful",
+         data: result,
+       });
+     } catch (error) {
+       res.status(500).send({
+         success: false,
+         message: "something went wrong ",
+       });
+     }
+   });
 
-    //       if(searchText){
-    //         query.productName = { $regex: searchText, $options: "i" };
-    //       }
 
-    //       result = await assetCollection
-    //         .find(query)
-    //         .sort({ dateAdded: -1 })
-    //         .toArray();
-    //     }
-    //     else {
-    //       result = await assetCollection
-    //         .find()
-    //         .sort({ dateAdded: -1 }).limit(8)
-    //         .toArray();
-    //     }
-
-    //     res.status(200).send({
-    //       success: true,
-    //       message: "Asset get successfully",
-    //       data: result,
-    //     });
-    //   } catch (error) {
-    //     res.status(500).send({
-    //       success: false,
-    //       message: "Internal server error",
-    //     });
-    //   }
-    // });
-
-    app.get("/assets", async (req, res) => {
+    app.get("/assets",async (req, res) => {
       try {
+       
         const { limit = 0, skip = 0, search } = req.query;
-        console.log(search);
+    
 
         const query = {};
         if (search) {
-          query.productName = { $regex: search, $options: "i" };
+          query.productName = { $regex: search, $options: "i" }
+         
         }
         const result = await assetCollection
           .find(query)
@@ -743,6 +797,36 @@ app.patch("/payment-success",async(req, res)=>{
     });
 
     //  Affiliation related api
+   app.get("/affiliations/affiliationsCompany",
+     verifyFToken,
+     async (req, res) => {
+       try {
+         const decoded_email = req.decoded_email;
+         const userEmail = req.query.email;
+         if (decoded_email !== userEmail) {
+           return res.send({
+             message: "Unauthorized accessed",
+           });
+         }
+         const result = await employeeAffiliationsCollection
+           .aggregate([
+             { $match: { employeeEmail: userEmail } },
+             { $group: { _id: "$companyName" } },
+             { $project: { _id: 0, companyName: "$_id" } },
+           ])
+           .toArray();
+         res.status(200).send({
+           success: true,
+           data: result,
+         });
+       } catch (error) {
+         res.status(500).send({
+           success: false,
+           message: "Internal server error",
+         });
+       }
+     }
+   );
 
     app.get("/affiliations/myEmployee", verifyFToken, async (req, res) => {
       try {
@@ -796,6 +880,7 @@ app.patch("/payment-success",async(req, res)=>{
         });
       }
     });
+   
 
     await client.db("admin").command({ ping: 1 });
     console.log("Connected to MongoDB successfully!");
